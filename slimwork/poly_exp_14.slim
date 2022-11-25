@@ -1,0 +1,362 @@
+// Keywords: nonWF, non-Wright-Fisher, continuous space, continuous spatial landscape, periodic boundaries, selfing
+
+initialize() {
+	setSeed(14);
+	setwd("~/Documents/Rwork/genoffset_vs_fitness_variation/paper_mceb/poly_exp/14");
+
+	
+
+	initializeSLiMModelType("nonWF");
+	initializeSLiMOptions(dimensionality="xy", periodicity="xy");
+	defineConstant("K", 11);   // carrying capacity
+	defineConstant("S", 0.8);   // spatial competition distanced
+	defineConstant("sigma_K", 0.5);
+	
+	initializeMutationType("m1", 0.5, "f", 0.0);
+	m1.convertToSubstitution = T;
+	initializeMutationType("m2", 0.5, "f", 0.005);   // QTL
+	m2.convertToSubstitution = F;
+	initializeMutationType("m3", 0.5, "f", 0.005);   // QTL
+	m3.convertToSubstitution = F;
+
+	
+	initializeGenomicElementType("g1", m1, 1.0);
+	initializeGenomicElement(g1, 0, 110000);
+	initializeMutationRate(3e-6);
+	initializeRecombinationRate(1e-2);
+	
+	// spatial competition
+	initializeInteractionType(1, "xy", reciprocal=T, maxDistance=S);
+	
+	// spatial mate choice
+	initializeInteractionType(2, "xy", reciprocal=T, maxDistance=0.5);
+}
+
+fitness(m2){return 1.0;}
+fitness(m3){return 1.0;}
+
+
+1 early() {
+	
+	sim.addSubpop("p1", 500);
+	p1.setSpatialBounds(c(0.0, 0.0, 12.0, 12.0));
+	
+	// random initial positions
+	p1.individuals.x = runif(500, 5, 7);
+	p1.individuals.y = runif(500, 5, 7);
+	//VARIABLE 1
+	// MAP 7 * 7
+	
+	mapVar1 = c();
+	
+	for (i in seq(1,12))
+	{
+		line = c();
+		for (j in seq(1,12)){
+			line = c(line, runif(1, (1/12)*(j-1), (1/12)*j));
+		}
+		mapVar1 = rbind(mapVar1, line);
+	}
+	
+	//VARIABLE 2
+	// MAP 7 * 7
+	
+	mapVar2 = c();
+	
+	for (i in seq(1,12))
+	{
+		line = c();
+		for (j in seq(1,12)){
+			line = c(line, runif(1, (1/12)*(i-1), (1/12)*i));
+		}
+		mapVar2 = rbind(mapVar2, line);
+	}
+	
+	
+	// MAP CREATION and MAP VARIATION
+	
+	
+	defineConstant("var1", mapVar1);
+	p1.defineSpatialMap("map1", "xy", var1, interpolate=F,valueRange=c(0.0, 1.0), colors=c("red", "yellow"));
+		
+	mapVar1Final = mapVar1 + runif(144, -0.3, 0.3);	
+	Var1Variation = mapVar1Final - mapVar1;
+	defineConstant("var1final", mapVar1Final);
+	p1.defineSpatialMap("map2", "xy", var1final, interpolate=F);
+	
+	defineConstant("var2", mapVar2);
+	p1.defineSpatialMap("map3", "xy", var2, interpolate=F);
+		
+	mapVar2Final = mapVar2 + runif(144, -0.3, 0.3);	
+	Var2Variation = mapVar2Final - mapVar2;
+	defineConstant("var2final", mapVar2Final);
+	p1.defineSpatialMap("map4", "xy", var2final, interpolate=F);
+	
+
+	
+	
+	
+	// Adding frontiere
+	mapFrontiere = rep(0,12);
+	for (i in seq(1,10))
+	{
+		mapFrontiere = rbind(mapFrontiere, c(0, rep(1,10), 0));
+	}
+	mapFrontiere = rbind(mapFrontiere, rep(0,12));
+	
+	defineConstant("varfrontiere", mapFrontiere);
+	p1.defineSpatialMap("mapFrontiere", "xy", varfrontiere, interpolate=F);
+	
+	// Adding frontiere init
+	mapFrontiereinit = c();
+	for (i in seq(1,4))
+	{
+		mapFrontiereinit = rbind(mapFrontiereinit, rep(0,12));
+	}
+	
+	for (i in seq(1,4))
+	{
+		mapFrontiereinit = rbind(mapFrontiereinit, c(rep(0,4), rep(1,4), rep(0,4)));
+	}
+	for (i in seq(1,4))
+	{
+		mapFrontiereinit = rbind(mapFrontiereinit, rep(0,12));
+	}
+	
+	
+	defineConstant("varfrontiereinit", mapFrontiereinit);
+	p1.defineSpatialMap("mapFrontiereinit", "xy", varfrontiereinit, interpolate=F);
+	
+	
+
+	
+}
+
+
+
+
+
+/////////////////////
+// NO SELECTION /////
+/////////////////////
+
+1:20200 late()
+{
+	// move around a bit
+	for (ind in p1.individuals)
+	{
+		newPos = ind.spatialPosition + runif(2, -0.3, 0.3);
+		ind.setSpatialPosition(p1.pointPeriodic(newPos));
+	}
+	
+	// then look for mates
+	i2.evaluate();
+}
+
+1:20200 reproduction() {
+	// choose our nearest neighbor as a mate, within the max distance
+	mate = i2.nearestNeighbors(individual, 100);
+	
+	for (i in seqLen(rpois(1, 0.1)))
+	{
+		if (mate.size()){
+			mate_index = rdunif(1,1,mate.size());
+			offspring = subpop.addCrossed(individual, mate[mate_index-1]);
+		}
+		else
+			offspring = individual;
+		
+		// set offspring position
+		pos = individual.spatialPosition + rnorm(2, 0, 0.3);
+		offspring.setSpatialPosition(p1.pointPeriodic(pos));
+	}
+}
+
+
+1:20000 early() {
+	i1.evaluate();
+	
+	// spatial competition provides density-dependent selection
+	inds = p1.individuals;
+	competition = i1.totalOfNeighborStrengths(inds);
+	competition = (competition + 1) / (PI * S^2);
+	inds.fitnessScaling = K / competition;
+	
+	location = inds.spatialPosition[rep(c(T,T), inds.size())];
+	frontscale = p1.spatialMapValue("mapFrontiereinit", location);
+	inds.fitnessScaling = inds.fitnessScaling * frontscale;
+
+}
+
+20000:20200 early() {
+i1.evaluate();
+	
+	// spatial competition provides density-dependent selection
+	inds = p1.individuals;
+	competition = i1.totalOfNeighborStrengths(inds);
+	competition = (competition + 1) / (PI * S^2);
+	inds.fitnessScaling = K / competition;
+	
+	location = inds.spatialPosition[rep(c(T,T), inds.size())];
+	frontscale = p1.spatialMapValue("mapFrontiere", location);
+	inds.fitnessScaling = inds.fitnessScaling * frontscale;
+}
+
+
+///////////////////////////
+///////////////////////////
+////  SELECTION PHASE /////
+///////////////////////////
+///////////////////////////
+
+20200:22000 late()
+{
+	// move around a bit
+	for (ind in p1.individuals)
+	{
+		newPos = ind.spatialPosition + runif(2, -0.3, 0.3);
+		ind.setSpatialPosition(p1.pointPeriodic(newPos));
+	}
+	
+	// then look for mates
+	i2.evaluate();
+}
+
+20200:22000 reproduction() {
+	// choose our nearest neighbor as a mate, within the max distance
+	mate = i2.nearestNeighbors(individual, 100);
+	
+	for (i in seqLen(rpois(1, 0.1)))
+	{
+		if (mate.size()){
+			mate_index = rdunif(1,1,mate.size());
+			offspring = subpop.addCrossed(individual, mate[mate_index-1]);
+		}
+		else
+			offspring = individual;
+		
+		// set offspring position
+		pos = individual.spatialPosition + rnorm(2, 0, 0.3);
+		offspring.setSpatialPosition(p1.pointPeriodic(pos));
+	}
+}
+
+22000:25000 late()
+{
+	// move around a bit
+	for (ind in p1.individuals)
+	{
+		newPos = ind.spatialPosition + runif(2, -0.1, 0.1);
+		ind.setSpatialPosition(p1.pointPeriodic(newPos));
+	}
+	
+	// then look for mates
+	i2.evaluate();
+}
+
+22000:25000 reproduction() {
+	// choose our nearest neighbor as a mate, within the max distance
+	mate = i2.nearestNeighbors(individual, 100);
+	
+	for (i in seqLen(rpois(1, 0.1)))
+	{
+		if (mate.size()){
+			mate_index = rdunif(1,1,mate.size());
+			offspring = subpop.addCrossed(individual, mate[mate_index-1]);
+		}
+		else
+			offspring = individual;
+		
+		// set offspring position
+		pos = individual.spatialPosition + rnorm(2, 0, 0.05);
+		offspring.setSpatialPosition(p1.pointPeriodic(pos));
+	}
+}
+
+20200 early() {
+		
+	for (i in seq(1,120)){
+		target1 = sample(p1.genomes, 300);
+		target1.addNewDrawnMutation(m2, 400 * i);
+	}
+	for (i in seq(1,120)){
+		target1 = sample(p1.genomes, 300);
+		target1.addNewDrawnMutation(m3, 50000+(400 * i));
+	}
+
+}
+
+20201:25000 early() {
+
+
+	inds = sim.subpopulations.individuals;
+	phenotype_var1 = inds.sumOfMutationsOfType(m2);
+	phenotype_var2 = inds.sumOfMutationsOfType(m3);
+	location = inds.spatialPosition[rep(c(T,T), inds.size())];
+	optimum_var1 = p1.spatialMapValue("map1", location);
+	optimum_var2 = p1.spatialMapValue("map3", location);
+	
+	
+	
+	inds.fitnessScaling = exp(-(1/2)*((((optimum_var1 - phenotype_var1)/sigma_K)^2) + ((optimum_var2 - phenotype_var2)/sigma_K)^2));
+	inds.color = p1.spatialMapColor("map1", phenotype_var1);
+	
+	i1.evaluate();
+	competition = i1.totalOfNeighborStrengths(inds);
+	competition = (competition + 1) / (PI * S^2);
+	inds.fitnessScaling = inds.fitnessScaling * (K / competition);
+	
+
+	
+	location = inds.spatialPosition[rep(c(T,T), inds.size())];
+	frontscale = p1.spatialMapValue("mapFrontiere", location);
+	inds.fitnessScaling = inds.fitnessScaling * frontscale;
+
+	
+}
+
+
+
+
+
+/////////////////////
+
+//// Output data ///
+
+////////////////////
+
+
+25000 late() {
+	p1.genomes.outputVCF("genome_step1.vcf");
+	
+	inds = sim.subpopulations.individuals;
+	writeFile('./position_ind_step1', inds.spatialPosition[rep(c(T,T), inds.size())] + "");
+	
+	sim.outputMutations(mutations=sim.mutationsOfType(m2), filePath = "./mutationm2_step1.txt");
+	sim.outputMutations(mutations=sim.mutationsOfType(m3), filePath = "./mutationm3_step1.txt");
+
+	
+	location = inds.spatialPosition[rep(c(T,T), inds.size())];
+	writeFile('./var1_step1', p1.spatialMapValue("map1", location) + "");
+	writeFile('./var1_pred', p1.spatialMapValue("map2", location) + "");
+	writeFile('./var2_step1', p1.spatialMapValue("map3", location) + "");
+	writeFile('./var2_pred', p1.spatialMapValue("map4", location) + "");
+	
+	pheno1_var1 = inds.sumOfMutationsOfType(m2);
+	opti1_var1 = p1.spatialMapValue("map1", location);
+	pheno1_var2 = inds.sumOfMutationsOfType(m3);
+	opti1_var2 = p1.spatialMapValue("map3", location);
+
+	fitness_step1 = exp(-(1/2)*((((opti1_var1 - pheno1_var1)/sigma_K)^2) + ((opti1_var2 - pheno1_var2)/sigma_K)^2));
+	writeFile('./fitness_step1', fitness_step1 + "");
+	
+	optipred_var1 = p1.spatialMapValue("map2", location);
+	optipred_var2 = p1.spatialMapValue("map4", location);
+
+	fitness_pred = exp(-(1/2)*((((optipred_var1 - pheno1_var1)/sigma_K)^2) + ((optipred_var2 - pheno1_var2)/sigma_K)^2));
+	writeFile('./fitness_pred', fitness_pred + "");
+}
+
+
+
+
