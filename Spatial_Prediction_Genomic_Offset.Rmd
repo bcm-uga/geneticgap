@@ -1,25 +1,25 @@
 ---
 title: "Visualizing geographic predictions of genetic offset measures"
-author: "Olivier François"
+author: "Olivier François (Université Grenoble-Alpes)"
 output:
-  html_document: default
   pdf_document: default
+  html_document: default
 ---
 
 ### Introduction 
 
 Genomic offset statistics  predict the maladaptation of populations to rapid habitat alteration based on association of genotypes with environmental variation. This brief tutorial explains how to represent predictions of genomic offset statistics within geographic maps. This can be achieved using standard `R` packages dedicated to spatial analysis. 
 
-In the tutorial, spatial prediction of genomic offset will be illustrated by analyzing publicly available genomic data from 1,096 European lines of the model plant *Arabidopsis thaliana* (https://www.1001genomes.org/) and climate models described in the sixth IPCC report (IPCC AR6).  
+In the tutorial, spatial prediction of genomic offset will be illustrated by analyzing publicly available genomic data from 1,096 European lines of the model plant *Arabidopsis thaliana* (https://www.1001genomes.org/) using  climate models described in the sixth IPCC report (IPCC AR6).  
 
-To represent geographic maps, there are many other and often better methods than the ones presented in the tutorial. I do not claim being a cartography specialist and the approach below is likely suboptimal. It is at least quite flexible, easy to reproduce, and can be used as basis for improved representations.   
+To represent geographic maps, there are many other and often better methods than the ones presented in this tutorial. I do not claim being a cartography specialist, and the approach below is likely to be q suboptimal one. It is at least quite flexible, easy to reproduce, and it can be used as basis for improved representations.   
 
 
 ### Loading genomic and environmental data
 
 Displaying genomic offset statistics in geographic space will require that the `R` packages  `terra`, `geodata`, `fields`, and `maps` are installed. The tutorial will use `LEA` for performing a genotype-environment association study and for computing genomic offset statistics.
 
-```{r, warning = FALSE}
+```{r, warning = FALSE, message= FALSE}
 # Required packages
 # Loading worldclim/cimp6 bioclimatic data
 library(terra)
@@ -36,7 +36,7 @@ library(LEA)
 Genomic and geographic data for A. thaliana samples are available from a previous tutorial on **running structure-like population genetic analyses with `R`**. 
 The data contain 1,096 genotypes from the first chromosome of the plant and geographic coordinates (latitude and longitude) associated with each sample. They can be downloaded as follows.
 
-```{r}
+```{r, warning = FALSE, message= FALSE}
 # default timeout option is 60s -- increase to 300s
 options(timeout = max(300, getOption("timeout")))
 
@@ -50,7 +50,7 @@ download.file(url = url, destfile = "./at_coord.coord")
 ```
 The data are then loaded as `R` objects, and the sample coordinates can be visualized as follows. 
 
-```{r}
+```{r, message = FALSE}
 genotype = LEA::read.geno("./A_thaliana_chr1.geno")
 coordinates = as.matrix(read.table("./at_coord.coord"))
 ```
@@ -58,7 +58,7 @@ coordinates = as.matrix(read.table("./at_coord.coord"))
 
 ```{r, fig.width=5,fig.height=5}
 plot(coordinates, cex = .4, col = "darkblue",
-     xlab = "Longitude", ylab = "Longitude",
+     xlab = "Longitude", ylab = "Latitude",
      main = "Sample coordinates", las = 1)
 
 maps::map(add = TRUE, interior = FALSE, col = "grey40")
@@ -66,7 +66,7 @@ maps::map(add = TRUE, interior = FALSE, col = "grey40")
 
 ### Bioclimatic variables
 
-In the following presentation, predictions will be based on bioclimatic variables from the worldclim database. The bioclimatic variables are downloaded below. The `climate` object contains 19 historical temperature and precipitation variables with low resolution. A temporary path is used for downloading. If additional analyses are planed, changing to non-temporary folders could be useful to avoid reloading (which may be slow).
+In the following presentation, predictions will be based on bioclimatic variables extracted from the worldclim database. The bioclimatic variables are downloaded below. The `climate` object contains 19 historical temperature and precipitation variables with low resolution. A temporary path is used for downloading. If additional analyses are planed, changing to a non-temporary directory could be useful to avoid reloading the data (which may be slow).
 
 
 ```{r}
@@ -77,7 +77,7 @@ climate <- geodata::worldclim_global(var = 'bio',
                                      path=tempdir())
 ```
 
-Next, the `climate_future` object contains future temperature and precipitation variables predicted from the SSP2-4.5 scenario developed with respect to the sixth IPCC report (IPCC AR6). There are several prediction models, and the one used here is called 'ACCESS-ESM1-5'.
+Next, the `climate_future` object contains future temperature and precipitation variables predicted from the SSP2-4.5 scenario developed with respect to the sixth IPCC report (IPCC AR6). Several climate models are available with `geodata`. The one used here is called 'ACCESS-ESM1-5'. If additional analyses are planed, changing to a non-temporary directory could be useful to avoid reloading the data
 
 
 ```{r}
@@ -109,9 +109,9 @@ X.env = X.env[,-1]
 
 ### Genotype-Environment Association study
 
-To evaluate genomic offset statistics, environmental effect sizes must be estimated at each genomic locus. This can be achieved by applying a latent factor model in `LEA`. Based on a previous analysis, five latent factors are used. Because temperature and precipitation have distinct units, the environmental data will be scaled to unit standard deviation. In other words, the data will be centered by substracting their mean, and then divided by their standard deviation. 
+To evaluate genomic offset statistics, environmental effect sizes must be estimated at each genomic locus. This can be achieved by applying a latent factor mixed model (LFMM) in `LEA`. Based on a previous analysis, five latent factors are used in the LFMM. Because temperature and precipitation have distinct units, the environmental data are  be centered by substracting their mean, and then divided by their standard deviation. 
 
-Another approach reduces the dimension of the bioclimatic data set by performing separate scaled PCA on temperature and precipitation variables. New variables could then be defined by retaining the first components in each separate analysis. This is not implemented here because our sample size is large.
+Another approach reduces the dimension of the bioclimatic data set by performing  scaled PCA on temperature and precipitation variables separately. New variables could then be defined by retaining the first components in each separate analysis. Working with a large sample size, dimension reduction is not implemented here.
 
 
 ```{r}
@@ -128,14 +128,18 @@ B <- mod_lfmm@B
 The GEA model can also be used to define a subset of candidate loci to be included in genomic offset computation. 
 
 ```{r}
-pv = lfmm2.test(mod_lfmm, input = genotype, env = scale(X.env), full = TRUE)
+pv = lfmm2.test(mod_lfmm, 
+                input = genotype, 
+                env = scale(X.env), 
+                full = TRUE)
+
 plot(-log10(pv$pvalue),
      xlab = "SNPs",
      cex = .3, pch = 19, col = "blue")
 ```
 
 
-A set of candidate loci needs to be relatively large. Statistical significance is not a requirement here, and a cut-off threshold at 5 can be chosen (but try 0 to 4).
+A set of candidate loci needs to be relatively large. Statistical significance is not a requirement here, and a cut-off threshold at minus log10 (pvalue) greater than 5 is chosen (but try 0 to 4).
 
 ```{r}
 # define candidate loci for GO analysis
@@ -150,7 +154,7 @@ sum(candidates)
 
 ### Extracting historical and future climate for Europe
 
-First, a reasonable range of longitude and latitude coordinates must be defined. This range of values includes the European mainland and some islands. Below `nc` is a critical resolution parameter. Increasing its value produces more precise maps at higher costs. 
+First, a reasonable range of longitude and latitude coordinates must be defined. This range of values includes the European mainland and some islands. Below `nc` is a critical resolution parameter. Increasing the `nc`  value produces more precise maps, but at higher costs. 
 
 ```{r}
 ## nc = resolution, higher is better but slower 
@@ -168,7 +172,7 @@ for (x in long.mat)
   for (y in lat.mat) coord.mat <- rbind(coord.mat, c(x,y))
 ```
 
-Then, the `R` package `terra` can extract the climate and the future climate data for every cell defined in the above coordinate matrix.
+Then, the `R` package `terra` can extract historical climate and future climate data for every cell defined in the above coordinate matrix `coord.mat`.
 
 ```{r}
 # Extract historical climate
@@ -188,22 +192,21 @@ env.pred = env.pred[,-1]
 
 ### Computing genomic offset for environmental matrices 
 
-The R package `LEA` can compute genomic offset statistics by using the `genomic.offset` function, but this function does not allow missing environmental data (NA's). For terrestrial species, environmental NA's are, however, a (tricky) way to display data in land areas only, showing seas as blank areas.  
+The R package `LEA` can compute genomic offset statistics by using the `genomic.offset` function. Here, genomic offset statistics will be recalculated without the help of the `genomic.offset` function (which, by the way, is not complicated).  The genomic offset value is recalculated in order to allow missing environmental data (NA's). For terrestrial species, environmental NA's are a (tricky) way to display data in land areas only, showing seas as blank areas.  
 
-To use that trick, genomic offset statistics will be recalculated without the help of the `genomic.offset` function, which, by the way, is not complicated. As the lfmm was adjusted on scaled historical environmental predictors, the same scaling must be performed for the future data. This is done below.
-
+As the lfmm was adjusted on scaled historical environmental predictors, the same scaling must be performed for the future data. This is done below.
 
 ```{r}
 ## scaling bioclimatic variables (with the same scale as in the lfmm)
 m.x <- apply(X.env, 2, FUN = function(x) mean(x, na.rm = TRUE))
-sd.x <- apply(X.env, 2, function(x) sd(x, na.rm = TRUE) )
+sd.x <- apply(X.env, 2, function(x) sd(x, na.rm = TRUE))
 
 env.new <- t(t(env.new) - m.x) %*% diag(1/sd.x)
 env.pred <- t(t(env.pred) - m.x) %*% diag(1/sd.x)
 ```
 
 
-For example, consider a (particular example) site in Germany with longitude around 10.06689 E, and latitude around 50.30769. 
+For example, consider a particular site in Germany with longitude around 10.06689 E, and latitude around 50.30769. 
 
 ```{r}
 # Coordinates (long, lat) of a geographic site in Germany, Europe 
@@ -213,12 +216,12 @@ coord.mat[36139,]
 The genomic offset at this particular geographic location can be calculated as follows. The statistic corresponds to the geometric GO defined in (Gain et al. 2023).
 
 ```{r}
-## Geometric genomic offset for coord.mat[36139,]
+## Geometric genomic offset for long = 10.06689, lat = 50.30769
 mean(((env.new - env.pred)[36139,]  %*% t(B[candidates,]))^2)
 ```
 
 
-Displaying a map requires to repeat the above computation for all geographic locations in the coordinate matrix. In `R`, this is usually be achieved by using the `apply` function. Below, a less elegant approach is carried out to evaluate the genomic offset at each cell. The reason for using a slow method is that the faster method may overload the memory space. So, be patient or modify the code chunk to avoid the loop.
+Displaying a map requires to repeat the above computation for all geographic locations in the coordinate matrix. In `R`, this is usually be achieved by using the `apply` function. Below, a less elegant approach is carried out to evaluate the genomic offset at each cell. The reason for using a slow method is that the faster method may overload the memory space. So, be patient or modify the code chunk to avoid the loop (run the last line of code only).
 
 ```{r}
 ## gg contains the Gain et al. geometric GO computed at each matrix cell
@@ -227,9 +230,12 @@ gg = NULL
 for (i in 1:nrow(env.new)){
 gg[i] = mean(((env.new - env.pred)[i,]  %*% t(B[candidates,]))^2, na.rm = TRUE)
 }
+
+# Impatient users may try this
+# gg = rowMeans(((env.new - env.pred)  %*% t(B[candidates,]))^2, na.rm = TRUE)
 ```
 
-The matrix that corresponds to the mapping of genomic offset statistics can be obtained as follows.
+The matrix that corresponds to a geographic mapping of all genomic offset statistics can be obtained as follows.
 
 ```{r}
 ## matrix of genomic offset for the Europe map
@@ -246,7 +252,7 @@ hist(as.numeric(go),
 ```
 
 
-There are several ways to represent the GO matrix in `R`. One option is by using the `R` package `fields`. I like this option because there is a legend placed to the right of the figure.
+There are several ways to represent the GO matrix in `R`. One option is by using the `R` package `fields`.  This option places a color key at the right of the figure.
 
 ```{r, fig.width = 6,fig.height=5}
 # my colors - they might change the story!
@@ -267,7 +273,7 @@ maps::map(add = TRUE, interior = FALSE, col = "grey40")
 points(coordinates, col = "grey40", cex = .3)
 ```
 
-Another graphic option is to use `image` in the R package `terra` after conversion as raster. This might then be harder to read the figure axes as longitude and latitude. But the resulting map looks the same as above. 
+Another graphic option is to use `image` in the R package `terra` after conversion as raster. This might then be harder to read the figure axes as longitude and latitude. 
 
 ```{r, fig.width=5,fig.height=5 }
 r <- terra::rast(t(go)[nc:1,])
@@ -279,7 +285,32 @@ terra::image(r,
 ```
 
 
-For A. thaliana, the most pessimistic predictions of maladaptation under scenario SSP2-4.5 are for areas in France, Italy, Belgium, Germany and in Central Europe. Regions in the Alps, Northern Europe and in areas under oceanic influence appear to be at lower risk. Of course, this interpretation is specific to the bioclimatic variables considered con and  the IPPC scenario used. The result requires further evidence from additional scenarios and combinations of predictors.   
+For A. thaliana, the most pessimistic predictions of maladaptation under scenario SSP2-4.5 are for areas in France, Italy, Belgium, Germany and in Central Europe. Regions in the Alps, Northern Europe and in areas under oceanic influence appear to be at lower risk. Of course, this interpretation is specific to the bioclimatic variables considered and to the IPPC scenario used. The result requires further evidence from additional scenarios and combinations of predictors.   
+
+
+
+## References
+
+1. Alonso-Blanco, C., Andrade, J., Becker, C., Bemm, F., Bergelson, J., Borgwardt, et al. (2016). 1,135 genomes reveal the global pattern of polymorphism in Arabidopsis thaliana. Cell, 166(2), 481-491.
+
+2. Caye, K., Jumentier, B., Lepeule, J., & François, O. (2019). LFMM 2: fast and accurate inference of gene-environment associations in genome-wide studies. Molecular biology and evolution, 36(4), 852-860.
+  
+3. Frichot, E.,  François, O. (2015). LEA: An R package for landscape and ecological association studies. Methods in Ecology and Evolution, 6(8), 925-929.
+
+4. Gain, C., Rhoné, B., Cubry, P., Salazar, I., Forbes, F., Vigouroux, Y., et al. (2023). A quantitative theory for genomic offset statistics. Molecular Biology and Evolution, 40(6), msad140. 
+
+5. IPCC AR6 Synthesis Report: Climate Change 2023, March 2023.
+
+6. Hijmans R (2024). terra: Spatial Data Analysis. R package version 1.7-71.
+
+7. Hijmans RJ, Barbosa M, Ghosh A, Mandel A (2023). `geodata: Download Geographic Data`. R package
+  version 0.5-9.
+  
+8.Douglas Nychka, Reinhard Furrer, John Paige, Stephan Sain (2021). fields: Tools for spatial data. R
+  package version 15.2.
+  
+
+
 
 
 
