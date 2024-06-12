@@ -2,9 +2,9 @@
 
 This repository stores all relevant R scripts to generate figures for the paper : "A quantitative theory for genomic offset statistics". It also contains a tutorial on  how to display predictions of genomic offset statistics in geographic maps. 
 
-## Tutorial
+## Tutorial for displaying genomic offsets in geographic maps
 
-The tutorial (Rmd and html) is a quite general example that extracts data from the worldclim database and from IPPC sixth report future climate scenarios. It shows how to display genomic offset predictions in a geographic map using R packages for spatial analysis.  The tutorial is not related to the Pearl millet data analysis done in our study, and for which the data were not based on worldclim variables. 
+The tutorial (Rmd, html, PDF) provides an example on how to extract data from the worldclim database and from IPPC sixth report future climate scenarios. It shows how to display genomic offset predictions in a geographic map using R packages for spatial analysis.  The tutorial is more general than the Pearl millet data analysis done in our study, and for which the data were based on more accurate bioclimatic variables. 
 
 
 ## Organisation of the repository
